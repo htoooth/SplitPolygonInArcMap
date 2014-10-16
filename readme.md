@@ -1,3 +1,3 @@
 # split polygon in arcmap
 
-## use it to split polygon in certain area or 
+## use it to split polygon in certain area or area persent
