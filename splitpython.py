@@ -5,16 +5,6 @@ infc = arcpy.GetParameterAsText(0)
 area = float(arcpy.GetParameterAsText(1))
 direction = int(arcpy.GetParameterAsText(2)) * math.pi / 180.0
 
-vec = arcpy.Point(math.cos(direction),math.sin(direction),0.0)
-z_vec = arcpy.Point(0.0,0.0,1.0)
-rev_vec = vector_cross(vec,z_vec)
-
-desc = arcpy.Describe(infc)
-shapefieldname = desc.ShapeFieldName
-
-rows = arcpy.SearchCursor(infc)
-
-
 def vector_cross(vector1,vector2):
     return (vector1.Y * vector2.Z - vector1.Z * vector2.Y,
             vector1.Z * vector2.X - vector1.X * vector2.Z,
@@ -32,18 +22,15 @@ def start_end(extent,direction):
     mid_x = (ul.X + ur.X) / 2.0
     mid_y = (ul.Y + ll.Y) / 2.0
 
-    # ax+b = y
-    slp = direction.Y/direction.X
-    b = mid_y - slp * mid_x
-    
-    # 求截点坐标
-    start = arcpy.Point(0.0,b)
-    end = arcpy.Point(-(b/slp),0.0)
-
-    if vector_dot(start,end):
-        return (start,end)
+    slp = direction[1]/direction[0]
+    xb = mid_y - slp*mid_x
+    s = arcpy.Point(0.0,xb)
+    e = arcpy.Point(-(xb/slp),0.0)
+    if vector_dot(s,e):
+        return (s,e)
     else:
-        return (end,start)
+        return (e,s)
+
 
 def generate(extent,direction):
     start,end = start_end(extent,direction)
@@ -56,10 +43,11 @@ def half(geometry,direction):
     extent = geometry.extent
     line = generate(extent,direction)
     geometries = geometry.cut(line)
+    
     return (geometries[0],geometries[1])
 
 def good_enough(guess,area):
-    return abs(guess - area) < 0.001
+    return abs(guess.area - area) < 0.001
 
 def split(geometry,area,direction):
     if good_enough(geometry,area):
@@ -67,15 +55,28 @@ def split(geometry,area,direction):
 
     left,right = half(geometry,direction)
 
-    if(right.area > area):
-        return this(right,area,direction)
+    if(left.area > area):
+        return this(left,area,direction)
     else:
-        area = area -right.area
-        return right.union(split(geometry,area,direction))
+        area = area -left.area
+        return left.union(split(geometry,area,direction))
+
+vec = arcpy.Point(math.cos(direction),math.sin(direction),0.0)
+z_vec = arcpy.Point(0.0,0.0,1.0)
+rev_vec = vector_cross(vec,z_vec)
+
+desc = arcpy.Describe(infc)
+shapefieldname = desc.ShapeFieldName
+
+rows = arcpy.SearchCursor(infc)
+cur = arcpy.InsertCursor(infc)
 
 for row in rows:
     feat = row.getValue(shapefieldname)
-    split(feat,area,rev_vec)
+    geo = split(feat,area,rev_vec)
+    new_feat = cur.newRow()
+    new_feat.shap = geo
+    cur.insertRow(new_feat)
     arcpy.AddMessage("{0},{1}".format(1,2))
 
 # def symbol(num):
